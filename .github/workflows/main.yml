@@ -1,98 +1,115 @@
-name: System Info Collection
+name: Generate Advanced System Info
 
 on:
   push:
     branches:
       - main
-  pull_request:
-    branches:
-      - main
 
 jobs:
-  collect_system_info:
-    runs-on: ubuntu-latest  # Use Ubuntu as the base image for the action
-
+  system_info:
+    runs-on: ubuntu-latest
+    
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v2
+    - name: Checkout repository
+      uses: actions/checkout@v2
 
-      - name: Set up Python environment
-        uses: actions/setup-python@v2
-        with:
-          python-version: '3.8'
+    - name: Set up Python environment
+      uses: actions/setup-python@v2
+      with:
+        python-version: '3.x'
 
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install psutil cpuinfo
+    - name: Install required dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y python3-pip sysstat stress nmap hdparm lshw smartmontools
+        pip install psutil  # platform module is built-in, no need to install
 
-      - name: Create system info collection script
-        run: |
-          echo 'import platform' > generate_system_info.py
-          echo 'import psutil' >> generate_system_info.py
-          echo 'import os' >> generate_system_info.py
-          echo 'import socket' >> generate_system_info.py
-          echo 'import datetime' >> generate_system_info.py
-          echo 'import subprocess' >> generate_system_info.py
-          echo 'import time' >> generate_system_info.py
-          echo 'import cpuinfo' >> generate_system_info.py
-          echo '' >> generate_system_info.py
-          echo '# Start collecting system information' >> generate_system_info.py
-          echo 'system_info = ""' >> generate_system_info.py
-          echo '' >> generate_system_info.py
-          echo 'system_info += "\n=== System Information ===\n"' >> generate_system_info.py
-          echo 'system_info += f"OS: {platform.system()} {platform.release()} {platform.version()}\n"' >> generate_system_info.py
-          echo 'system_info += f"Machine: {platform.machine()}\n"' >> generate_system_info.py
-          echo 'system_info += f"Processor: {platform.processor()}\n"' >> generate_system_info.py
-          echo 'system_info += f"CPU Count: {psutil.cpu_count(logical=False)} physical cores\n"' >> generate_system_info.py
-          echo 'system_info += f"CPU Cores: {psutil.cpu_count(logical=True)} logical processors\n"' >> generate_system_info.py
-          echo 'system_info += f"CPU Frequency: {psutil.cpu_freq().current} MHz\n"' >> generate_system_info.py
-          echo 'system_info += f"Total Memory: {round(psutil.virtual_memory().total / (1024.0 ** 3), 2)} GB\n"' >> generate_system_info.py
-          echo 'system_info += f"Used Memory: {round(psutil.virtual_memory().used / (1024.0 ** 3), 2)} GB\n"' >> generate_system_info.py
-          echo 'system_info += f"Available Memory: {round(psutil.virtual_memory().available / (1024.0 ** 3), 2)} GB\n"' >> generate_system_info.py
-          echo 'system_info += f"Swap Memory: {round(psutil.swap_memory().total / (1024.0 ** 3), 2)} GB\n"' >> generate_system_info.py
-          echo '' >> generate_system_info.py
-          echo '# CPU usage per core' >> generate_system_info.py
-          echo 'system_info += "\n=== CPU Usage per Core ===\n"' >> generate_system_info.py
-          echo 'for i, percent in enumerate(psutil.cpu_percent(percpu=True, interval=1)):' >> generate_system_info.py
-          echo '    system_info += f"Core {i}: {percent}% usage\n"' >> generate_system_info.py
-          echo '' >> generate_system_info.py
-          echo '# Disk Information' >> generate_system_info.py
-          echo 'system_info += "\n=== Disk Information ===\n"' >> generate_system_info.py
-          echo 'partitions = psutil.disk_partitions()' >> generate_system_info.py
-          echo 'for partition in partitions:' >> generate_system_info.py
-          echo '    usage = psutil.disk_usage(partition.mountpoint)' >> generate_system_info.py
-          echo '    system_info += f"Partition: {partition.device}\n"' >> generate_system_info.py
-          echo '    system_info += f"  Mountpoint: {partition.mountpoint}\n"' >> generate_system_info.py
-          echo '    system_info += f"  Filesystem Type: {partition.fstype}\n"' >> generate_system_info.py
-          echo '    system_info += f"  Total: {round(usage.total / (1024.0 ** 3), 2)} GB\n"' >> generate_system_info.py
-          echo '    system_info += f"  Used: {round(usage.used / (1024.0 ** 3), 2)} GB\n"' >> generate_system_info.py
-          echo '    system_info += f"  Free: {round(usage.free / (1024.0 ** 3), 2)} GB\n"' >> generate_system_info.py
-          echo '    system_info += f"  Percentage: {usage.percent}% used\n"' >> generate_system_info.py
-          echo '' >> generate_system_info.py
-          echo '# Network Information' >> generate_system_info.py
-          echo 'system_info += "\n=== Network Information ===\n"' >> generate_system_info.py
-          echo 'interfaces = psutil.net_if_addrs()' >> generate_system_info.py
-          echo 'for interface, addrs in interfaces.items():' >> generate_system_info.py
-          echo '    for addr in addrs:' >> generate_system_info.py
-          echo '        if addr.family == socket.AF_INET:' >> generate_system_info.py
-          echo '            system_info += f"Interface {interface}: {addr.address}\n"' >> generate_system_info.py
-          echo '' >> generate_system_info.py
-          echo '# Write the collected information to a file' >> generate_system_info.py
-          echo 'with open("system_info.txt", "w") as f:' >> generate_system_info.py
-          echo '    f.write(system_info)' >> generate_system_info.py
-          echo 'print("System information collected and saved to system_info.txt.")' >> generate_system_info.py
+    - name: Generate Advanced System Info Script
+      run: |
+        echo 'import platform' > generate_system_info.py
+        echo 'import psutil' >> generate_system_info.py
+        echo 'import os' >> generate_system_info.py
+        echo 'import socket' >> generate_system_info.py
+        echo 'import datetime' >> generate_system_info.py
+        echo 'import subprocess' >> generate_system_info.py
+        echo 'import sys' >> generate_system_info.py
+        echo 'system_info = ""' >> generate_system_info.py
+        
+        # Header: System Information
+        echo 'system_info += "\n\n=== System Information ===\n"' >> generate_system_info.py
+        echo 'system_info += "OS: " + platform.system() + " " + platform.release() + " " + platform.version()' >> generate_system_info.py
+        echo 'system_info += "\\nMachine: " + platform.machine()' >> generate_system_info.py
+        echo 'system_info += "\\nProcessor: " + platform.processor()' >> generate_system_info.py
+        echo 'system_info += "\\nCPU Count: " + str(psutil.cpu_count(logical=False))' >> generate_system_info.py
+        echo 'system_info += "\\nCPU Cores: " + str(psutil.cpu_count(logical=True))' >> generate_system_info.py
+        echo 'system_info += "\\nCPU Frequency: " + str(psutil.cpu_freq().current) + " MHz"' >> generate_system_info.py
+        echo 'system_info += "\\nTotal Memory: " + str(round(psutil.virtual_memory().total / (1024.0 ** 3), 2)) + " GB"' >> generate_system_info.py
+        echo 'system_info += "\\nUsed Memory: " + str(round(psutil.virtual_memory().used / (1024.0 ** 3), 2)) + " GB"' >> generate_system_info.py
+        echo 'system_info += "\\nAvailable Memory: " + str(round(psutil.virtual_memory().available / (1024.0 ** 3), 2)) + " GB"' >> generate_system_info.py
+        echo 'system_info += "\\nDisk Usage: " + str(psutil.disk_usage("/").percent) + "%" ' >> generate_system_info.py
+        echo 'system_info += "\\nUptime: " + str(datetime.timedelta(seconds=int(psutil.boot_time())))' >> generate_system_info.py
+        echo 'system_info += "\\nPython Version: " + platform.python_version()' >> generate_system_info.py
+        
+        # Additional Hardware Info
+        echo 'system_info += "\n\n=== Additional Hardware Info ===\n"' >> generate_system_info.py
+        echo 'system_info += subprocess.check_output(["lshw", "-short"]).decode()' >> generate_system_info.py
+        
+        # Temperature Info (CPU, Battery)
+        echo 'system_info += "\n\n=== Temperature Information ===\n"' >> generate_system_info.py
+        echo 'try:' >> generate_system_info.py
+        echo '  temp_info = subprocess.check_output(["sensors"]).decode()' >> generate_system_info.py
+        echo '  system_info += temp_info' >> generate_system_info.py
+        echo 'except subprocess.CalledProcessError as e:' >> generate_system_info.py
+        echo '  system_info += "\\nTemperature: Unable to fetch sensor data"' >> generate_system_info.py
 
-      - name: Run the system information collection script
-        run: |
-          python3 generate_system_info.py
+        # Battery Status
+        echo 'system_info += "\n\n=== Battery Status ===\n"' >> generate_system_info.py
+        echo 'try:' >> generate_system_info.py
+        echo '  battery_info = psutil.sensors_battery()' >> generate_system_info.py
+        echo '  system_info += "Battery Percentage: " + str(battery_info.percent) + "%"' >> generate_system_info.py
+        echo '  system_info += "\\nCharging: " + str(battery_info.power_plugged)' >> generate_system_info.py
+        echo 'except Exception as e:' >> generate_system_info.py
+        echo '  system_info += "\\nBattery Info: Unable to fetch data"' >> generate_system_info.py
 
-      - name: Commit and push the system info file to the repo
-        run: |
-          git config --global user.name "GitHub Actions"
-          git config --global user.email "actions@github.com"
-          git add system_info.txt
-          git commit -m "Add system info report"
-          git push
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # GitHub token for authentication
+        # Disk Health Status (SMART data)
+        echo 'system_info += "\n\n=== Disk Health Status ===\n"' >> generate_system_info.py
+        echo 'try:' >> generate_system_info.py
+        echo '  disk_health = subprocess.check_output(["smartctl", "-a", "/dev/sda"]).decode()' >> generate_system_info.py
+        echo '  system_info += disk_health' >> generate_system_info.py
+        echo 'except subprocess.CalledProcessError as e:' >> generate_system_info.py
+        echo '  system_info += "\\nDisk Health: Unable to fetch SMART data"' >> generate_system_info.py
+
+        # Network Info (IP, DNS, etc.)
+        echo 'system_info += "\n\n=== Network Information ===\n"' >> generate_system_info.py
+        echo 'system_info += "HostName: " + socket.gethostname()' >> generate_system_info.py
+        echo 'try:' >> generate_system_info.py
+        echo '  ip_info = subprocess.check_output(["hostname", "-I"]).decode()' >> generate_system_info.py
+        echo '  system_info += "\\nIP Address: " + ip_info.strip()' >> generate_system_info.py
+        echo '  dns_info = subprocess.check_output(["cat", "/etc/resolv.conf"]).decode()' >> generate_system_info.py
+        echo '  system_info += "\\nDNS Servers: " + dns_info' >> generate_system_info.py
+        echo 'except subprocess.CalledProcessError as e:' >> generate_system_info.py
+        echo '  system_info += "\\nNetwork Info: Unable to fetch data"' >> generate_system_info.py
+
+        # System Limits
+        echo 'system_info += "\n\n=== System Limits ===\n"' >> generate_system_info.py
+        echo 'system_info += "Max Open Files: " + str(os.sysconf("SC_OPEN_MAX"))' >> generate_system_info.py
+        echo 'system_info += "\\nFile Descriptors: " + str(psutil.Process(os.getpid()).num_fds())' >> generate_system_info.py
+
+        # Stress Test Output
+        echo 'system_info += "\n\n=== Stress Test ===\n"' >> generate_system_info.py
+        echo 'stress = subprocess.Popen(["stress", "--cpu", "4", "--timeout", "5s"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)' >> generate_system_info.py
+        echo 'stdout, stderr = stress.communicate()' >> generate_system_info.py
+        echo 'system_info += "Stress Test Output: \\n" + stdout.decode() + stderr.decode()' >> generate_system_info.py
+
+        # Write to a file
+        echo 'with open("system_info.txt", "w") as f: f.write(system_info)' >> generate_system_info.py
+
+    - name: Run the Python script to collect system information
+      run: |
+        python3 generate_system_info.py
+
+    - name: Upload system_info.txt as artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: system-info
+        path: system_info.txt
