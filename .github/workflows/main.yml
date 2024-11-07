@@ -1,95 +1,113 @@
-name: Generate Enhanced System Info
+name: System Info Collection
 
 on:
   push:
     branches:
-      - main
+      - main  # This will run the workflow on push to the 'main' branch
 
 jobs:
-  system_info:
+  collect-system-info:
     runs-on: ubuntu-latest
-    
+
     steps:
-    - name: Checkout repository
+    # Step 1: Checkout the repository to the workflow runner
+    - name: Checkout code
       uses: actions/checkout@v2
 
-    - name: Set up Python environment
-      uses: actions/setup-python@v2
-      with:
-        python-version: '3.x'
-
-    - name: Install required dependencies
+    # Step 2: Install required dependencies (Python, sysstat, stress, etc.)
+    - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y python3-pip sysstat stress nmap hdparm
+        sudo apt-get install -y python3-pip sysstat stress nmap
         pip install psutil
 
-
-    - name: Generate Enhanced System Info Script
+    # Step 3: Create and run the system info Python script
+    - name: Generate system info
       run: |
-        echo 'import platform' > generate_system_info.py
-        echo 'import psutil' >> generate_system_info.py
-        echo 'import os' >> generate_system_info.py
-        echo 'import socket' >> generate_system_info.py
-        echo 'import datetime' >> generate_system_info.py
-        echo 'import subprocess' >> generate_system_info.py
-        echo 'import time' >> generate_system_info.py
-        echo 'import sys' >> generate_system_info.py
-        echo 'system_info = ""' >> generate_system_info.py
-        
-        # Basic system information
-        echo 'system_info += "System Information: " + platform.system() + " " + platform.release() + " " + platform.version()' >> generate_system_info.py
-        echo 'system_info += "\\nMachine: " + platform.machine()' >> generate_system_info.py
-        echo 'system_info += "\\nProcessor: " + platform.processor()' >> generate_system_info.py
-        echo 'system_info += "\\nCPU Count: " + str(psutil.cpu_count(logical=False))' >> generate_system_info.py
-        echo 'system_info += "\\nCPU Cores: " + str(psutil.cpu_count(logical=True))' >> generate_system_info.py
-        echo 'system_info += "\\nCPU Frequency: " + str(psutil.cpu_freq().current) + " MHz"' >> generate_system_info.py
-        echo 'system_info += "\\nTotal Memory: " + str(round(psutil.virtual_memory().total / (1024.0 ** 3), 2)) + " GB"' >> generate_system_info.py
-        echo 'system_info += "\\nUsed Memory: " + str(round(psutil.virtual_memory().used / (1024.0 ** 3), 2)) + " GB"' >> generate_system_info.py
-        echo 'system_info += "\\nAvailable Memory: " + str(round(psutil.virtual_memory().available / (1024.0 ** 3), 2)) + " GB"' >> generate_system_info.py
-        echo 'system_info += "\\nDisk Usage: " + str(psutil.disk_usage("/").percent) + "%" ' >> generate_system_info.py
-        echo 'system_info += "\\nUptime: " + str(datetime.timedelta(seconds=int(psutil.boot_time())))' >> generate_system_info.py
-        echo 'system_info += "\\nPython Version: " + platform.python_version()' >> generate_system_info.py
-        
-        # Installed Python packages
-        echo 'system_info += "\\nInstalled Packages: " + str(subprocess.check_output([ "pip", "freeze"]))' >> generate_system_info.py
+        echo "
+import subprocess
+import psutil
+import platform
+import os
 
-        # Environment variables
-        echo 'system_info += "\\nEnvironment Variables: " + str(dict(os.environ))' >> generate_system_info.py
-        echo 'system_info += "\\nHostName: " + socket.gethostname()' >> generate_system_info.py
+def run_command(command):
+    try:
+        result = subprocess.check_output(command, stderr=subprocess.STDOUT).decode()
+        return result
+    except subprocess.CalledProcessError as e:
+        return f'Error executing command: {e.output.decode()}'
 
-        # System file limits
-        echo 'system_info += "\\nMax Open Files: " + str(os.sysconf("SC_OPEN_MAX"))' >> generate_system_info.py
+system_info = f'''
+System Information:
+-------------------
+Operating System: {platform.system()} {platform.release()} {platform.version()}
+Platform: {platform.platform()}
+Architecture: {platform.architecture()[0]}
+Processor: {platform.processor()}
+Machine: {platform.machine()}
 
-        # Disk performance
-        echo 'disk_speed = subprocess.check_output(["hdparm", "-Tt", "/dev/sda"]).decode()' >> generate_system_info.py
-        echo 'system_info += "\\nDisk Speed (Read/Write): " + disk_speed' >> generate_system_info.py
-        
-        # Network Performance
-        echo 'network_speed = subprocess.check_output(["nmap", "--packet-trace", "google.com"]).decode()' >> generate_system_info.py
-        echo 'system_info += "\\nNetwork Latency: " + network_speed' >> generate_system_info.py
+Memory Information:
+-------------------
+Total Memory: {psutil.virtual_memory().total / (1024 ** 3):.2f} GB
+Available Memory: {psutil.virtual_memory().available / (1024 ** 3):.2f} GB
+Memory Usage: {psutil.virtual_memory().percent}%
 
-        # Load Testing: CPU stress (using stress tool)
-        echo 'system_info += "\\nStress Test: CPU Load (5 seconds)..."' >> generate_system_info.py
-        echo 'stress = subprocess.Popen(["stress", "--cpu", "4", "--timeout", "5s"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)' >> generate_system_info.py
-        echo 'stdout, stderr = stress.communicate()' >> generate_system_info.py
-        echo 'system_info += "\\nStress Test Output: " + stdout.decode() + stderr.decode()' >> generate_system_info.py
+Disk Information:
+-------------------
+Total Disk Space: {psutil.disk_usage('/').total / (1024 ** 3):.2f} GB
+Used Disk Space: {psutil.disk_usage('/').used / (1024 ** 3):.2f} GB
+Free Disk Space: {psutil.disk_usage('/').free / (1024 ** 3):.2f} GB
+Disk Usage: {psutil.disk_usage('/').percent}%
 
-        # Network load testing (ping)
-        echo 'system_info += "\\nNetwork Ping Test (ping google.com)..."' >> generate_system_info.py
-        echo 'ping_test = subprocess.check_output(["ping", "-c", "5", "google.com"]).decode()' >> generate_system_info.py
-        echo 'system_info += "\\nPing Results: " + ping_test' >> generate_system_info.py
+CPU Information:
+-------------------
+CPU Count: {psutil.cpu_count(logical=False)}
+Logical CPU Count: {psutil.cpu_count(logical=True)}
+CPU Usage: {psutil.cpu_percent(interval=1)}%
 
-        # Write to a file
-        echo 'with open("system_info.txt", "w") as f: f.write(system_info)' >> generate_system_info.py
+Network Information:
+--------------------
+IP Address: {psutil.net_if_addrs()['eth0'][0].address if 'eth0' in psutil.net_if_addrs() else 'N/A'}
+Network Interfaces: {', '.join(psutil.net_if_addrs().keys())}
 
-    - name: Run the Python script to collect system information
-      run: |
+Process Information:
+--------------------
+Total Processes: {len(psutil.pids())}
+Top 5 Processes:
+"""
+top_processes = sorted(psutil.process_iter(['pid', 'name', 'memory_info']), key=lambda p: p.info['memory_info'].rss, reverse=True)[:5]
+for proc in top_processes:
+    system_info += f"PID: {proc.info['pid']}, Name: {proc.info['name']}, Memory: {proc.info['memory_info'].rss / (1024 ** 2):.2f} MB\n"
+
+disk_speed = run_command(
+    ['dd', 'if=/dev/zero', 'of=/tmp/test1.img', 'bs=1M', 'count=1024', 'oflag=dsync', 'status=none']
+)
+system_info += f"\nDisk Speed (Write Test): {disk_speed}"
+
+run_command(['rm', '/tmp/test1.img'])
+
+gpu_info = run_command(['nvidia-smi']) if os.system('which nvidia-smi') == 0 else 'No NVIDIA GPU found.'
+
+system_info += f"\nGPU Information:\n{gpu_info}"
+
+uptime = run_command(['uptime', '-p'])
+system_info += f"\nUptime: {uptime}"
+
+load_averages = os.getloadavg()
+system_info += f"\nLoad Averages (1, 5, 15 min): {load_averages[0]:.2f}, {load_averages[1]:.2f}, {load_averages[2]:.2f}"
+
+system_info += f"\nGitHub VM Details:\n{run_command(['uname', '-a'])}"
+
+with open('system_info.txt', 'w') as f:
+    f.write(system_info)
+
+print('System information gathered successfully.')
+        " > generate_system_info.py
         python3 generate_system_info.py
 
-    - name: Upload system_info.txt as artifact
-      uses: actions/upload-artifact@v4
+    # Step 4: Upload the generated system_info.txt file as an artifact
+    - name: Upload system info artifact
+      uses: actions/upload-artifact@v3
       with:
         name: system-info
         path: system_info.txt
-
