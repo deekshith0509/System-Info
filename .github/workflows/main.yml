@@ -68,8 +68,11 @@ jobs:
         echo '  system_info += "\\nDisk Speed: Permission Denied or Error"' >> generate_system_info.py
 
         # Network Performance
-        echo 'network_speed = subprocess.check_output(["nmap", "--packet-trace", "google.com"]).decode()' >> generate_system_info.py
-        echo 'system_info += "\\nNetwork Latency: " + network_speed' >> generate_system_info.py
+        echo 'try:' >> generate_system_info.py
+        echo '  network_speed = subprocess.check_output(["nmap", "--packet-trace", "google.com"]).decode()' >> generate_system_info.py
+        echo '  system_info += "\\nNetwork Latency: " + network_speed' >> generate_system_info.py
+        echo 'except subprocess.CalledProcessError as e:' >> generate_system_info.py
+        echo '  system_info += "\\nNetwork Latency: Permission Denied or Error"' >> generate_system_info.py
 
         # Load Testing: CPU stress (using stress tool)
         echo 'system_info += "\\nStress Test: CPU Load (5 seconds)..."' >> generate_system_info.py
@@ -78,9 +81,11 @@ jobs:
         echo 'system_info += "\\nStress Test Output: " + stdout.decode() + stderr.decode()' >> generate_system_info.py
 
         # Network load testing (ping)
-        echo 'system_info += "\\nNetwork Ping Test (ping google.com)..."' >> generate_system_info.py
-        echo 'ping_test = subprocess.check_output(["ping", "-c", "5", "google.com"]).decode()' >> generate_system_info.py
-        echo 'system_info += "\\nPing Results: " + ping_test' >> generate_system_info.py
+        echo 'try:' >> generate_system_info.py
+        echo '  ping_test = subprocess.check_output(["ping", "-c", "5", "google.com"]).decode()' >> generate_system_info.py
+        echo '  system_info += "\\nPing Results: " + ping_test' >> generate_system_info.py
+        echo 'except subprocess.CalledProcessError as e:' >> generate_system_info.py
+        echo '  system_info += "\\nPing Test: Permission Denied or Error"' >> generate_system_info.py
 
         # Write to a file
         echo 'with open("system_info.txt", "w") as f: f.write(system_info)' >> generate_system_info.py
