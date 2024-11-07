@@ -87,7 +87,8 @@ jobs:
         python3 generate_system_info.py
 
     - name: Upload system_info.txt as artifact
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v4
       with:
         name: system-info
         path: system_info.txt
+
