@@ -21,7 +21,7 @@ jobs:
     - name: Install required dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y python3-pip sysstat stress nmap hdparm lshw smartmontools
+        sudo apt-get install -y python3-pip sysstat stress nmap hdparm lshw smartmontools lm-sensors
         pip install psutil  # platform module is built-in, no need to install
 
     - name: Generate Advanced System Info Script
@@ -60,7 +60,7 @@ jobs:
         echo '  temp_info = subprocess.check_output(["sensors"]).decode()' >> generate_system_info.py
         echo '  system_info += temp_info' >> generate_system_info.py
         echo 'except subprocess.CalledProcessError as e:' >> generate_system_info.py
-        echo '  system_info += "\\nTemperature: Unable to fetch sensor data"' >> generate_system_info.py
+        echo '  system_info += "\\nTemperature: Unable to fetch sensor data (sensors not available)"' >> generate_system_info.py
 
         # Battery Status
         echo 'system_info += "\n\n=== Battery Status ===\n"' >> generate_system_info.py
@@ -77,7 +77,7 @@ jobs:
         echo '  disk_health = subprocess.check_output(["smartctl", "-a", "/dev/sda"]).decode()' >> generate_system_info.py
         echo '  system_info += disk_health' >> generate_system_info.py
         echo 'except subprocess.CalledProcessError as e:' >> generate_system_info.py
-        echo '  system_info += "\\nDisk Health: Unable to fetch SMART data"' >> generate_system_info.py
+        echo '  system_info += "\\nDisk Health: Unable to fetch SMART data (smartctl not available)"' >> generate_system_info.py
 
         # Network Info (IP, DNS, etc.)
         echo 'system_info += "\n\n=== Network Information ===\n"' >> generate_system_info.py
