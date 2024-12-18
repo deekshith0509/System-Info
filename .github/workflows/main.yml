@@ -1,115 +1,296 @@
-name: Generate Advanced System Info
+name: Generate Comprehensive System Information
 
 on:
   push:
     branches:
       - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:  # Allow manual triggering
 
 jobs:
-  system_info:
+  system_info_collection:
     runs-on: ubuntu-latest
     
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v2
+      uses: actions/checkout@v4
 
-    - name: Set up Python environment
-      uses: actions/setup-python@v2
-      with:
-        python-version: '3.x'
-
-    - name: Install required dependencies
+    - name: Set up comprehensive system environment
       run: |
         sudo apt-get update
-        sudo apt-get install -y python3-pip sysstat stress nmap hdparm lshw smartmontools lm-sensors
-        pip install psutil  # platform module is built-in, no need to install
+        sudo apt-get upgrade -y
+        sudo apt-get install -y \
+          python3-pip \
+          sysstat \
+          stress \
+          nmap \
+          hdparm \
+          lshw \
+          smartmontools \
+          lm-sensors \
+          dmidecode \
+          inxi \
+          hwinfo \
+          pciutils \
+          usbutils \
+          net-tools \
+          ethtool \
+          wireless-tools \
+          iproute2 \
+          procps \
+          acpica-tools \
+          cpuid
 
-    - name: Generate Advanced System Info Script
+    - name: Install Python dependencies
       run: |
-        echo 'import platform' > generate_system_info.py
-        echo 'import psutil' >> generate_system_info.py
-        echo 'import os' >> generate_system_info.py
-        echo 'import socket' >> generate_system_info.py
-        echo 'import datetime' >> generate_system_info.py
-        echo 'import subprocess' >> generate_system_info.py
-        echo 'import sys' >> generate_system_info.py
-        echo 'system_info = ""' >> generate_system_info.py
-        
-        # Header: System Information
-        echo 'system_info += "\n\n=== System Information ===\n"' >> generate_system_info.py
-        echo 'system_info += "OS: " + platform.system() + " " + platform.release() + " " + platform.version()' >> generate_system_info.py
-        echo 'system_info += "\\nMachine: " + platform.machine()' >> generate_system_info.py
-        echo 'system_info += "\\nProcessor: " + platform.processor()' >> generate_system_info.py
-        echo 'system_info += "\\nCPU Count: " + str(psutil.cpu_count(logical=False))' >> generate_system_info.py
-        echo 'system_info += "\\nCPU Cores: " + str(psutil.cpu_count(logical=True))' >> generate_system_info.py
-        echo 'system_info += "\\nCPU Frequency: " + str(psutil.cpu_freq().current) + " MHz"' >> generate_system_info.py
-        echo 'system_info += "\\nTotal Memory: " + str(round(psutil.virtual_memory().total / (1024.0 ** 3), 2)) + " GB"' >> generate_system_info.py
-        echo 'system_info += "\\nUsed Memory: " + str(round(psutil.virtual_memory().used / (1024.0 ** 3), 2)) + " GB"' >> generate_system_info.py
-        echo 'system_info += "\\nAvailable Memory: " + str(round(psutil.virtual_memory().available / (1024.0 ** 3), 2)) + " GB"' >> generate_system_info.py
-        echo 'system_info += "\\nDisk Usage: " + str(psutil.disk_usage("/").percent) + "%" ' >> generate_system_info.py
-        echo 'system_info += "\\nUptime: " + str(datetime.timedelta(seconds=int(psutil.boot_time())))' >> generate_system_info.py
-        echo 'system_info += "\\nPython Version: " + platform.python_version()' >> generate_system_info.py
-        
-        # Additional Hardware Info
-        echo 'system_info += "\n\n=== Additional Hardware Info ===\n"' >> generate_system_info.py
-        echo 'system_info += subprocess.check_output(["lshw", "-short"]).decode()' >> generate_system_info.py
-        
-        # Temperature Info (CPU, Battery)
-        echo 'system_info += "\n\n=== Temperature Information ===\n"' >> generate_system_info.py
-        echo 'try:' >> generate_system_info.py
-        echo '  temp_info = subprocess.check_output(["sensors"]).decode()' >> generate_system_info.py
-        echo '  system_info += temp_info' >> generate_system_info.py
-        echo 'except subprocess.CalledProcessError as e:' >> generate_system_info.py
-        echo '  system_info += "\\nTemperature: Unable to fetch sensor data (sensors not available)"' >> generate_system_info.py
+        pip install --upgrade pip
+        pip install \
+          psutil \
+          GPUtil \
+          py-cpuinfo \
+          speedtest-cli \
+          netifaces \
+          distro \
+          packaging \
+          wmi
 
-        # Battery Status
-        echo 'system_info += "\n\n=== Battery Status ===\n"' >> generate_system_info.py
-        echo 'try:' >> generate_system_info.py
-        echo '  battery_info = psutil.sensors_battery()' >> generate_system_info.py
-        echo '  system_info += "Battery Percentage: " + str(battery_info.percent) + "%"' >> generate_system_info.py
-        echo '  system_info += "\\nCharging: " + str(battery_info.power_plugged)' >> generate_system_info.py
-        echo 'except Exception as e:' >> generate_system_info.py
-        echo '  system_info += "\\nBattery Info: Unable to fetch data"' >> generate_system_info.py
+    - name: Generate Comprehensive System Info Script
+      run: |
+        cat > generate_system_info.py << 'EOL'
+        import os
+        import sys
+        import platform
+        import psutil
+        import socket
+        import datetime
+        import subprocess
+        import json
+        import cpuinfo
+        import GPUtil
+        import speedtest
+        import netifaces
+        import distro
+        import re
 
-        # Disk Health Status (SMART data)
-        echo 'system_info += "\n\n=== Disk Health Status ===\n"' >> generate_system_info.py
-        echo 'try:' >> generate_system_info.py
-        echo '  disk_health = subprocess.check_output(["smartctl", "-a", "/dev/sda"]).decode()' >> generate_system_info.py
-        echo '  system_info += disk_health' >> generate_system_info.py
-        echo 'except subprocess.CalledProcessError as e:' >> generate_system_info.py
-        echo '  system_info += "\\nDisk Health: Unable to fetch SMART data (smartctl not available)"' >> generate_system_info.py
+        def safe_run_command(command, shell=False, error_message="Command failed"):
+            """Safely run system commands with error handling."""
+            try:
+                if isinstance(command, str):
+                    result = subprocess.check_output(command, shell=shell, stderr=subprocess.STDOUT, text=True)
+                else:
+                    result = subprocess.check_output(command, stderr=subprocess.STDOUT, text=True)
+                return result
+            except subprocess.CalledProcessError as e:
+                return f"{error_message}: {e.output}"
+            except Exception as e:
+                return f"{error_message}: {str(e)}"
 
-        # Network Info (IP, DNS, etc.)
-        echo 'system_info += "\n\n=== Network Information ===\n"' >> generate_system_info.py
-        echo 'system_info += "HostName: " + socket.gethostname()' >> generate_system_info.py
-        echo 'try:' >> generate_system_info.py
-        echo '  ip_info = subprocess.check_output(["hostname", "-I"]).decode()' >> generate_system_info.py
-        echo '  system_info += "\\nIP Address: " + ip_info.strip()' >> generate_system_info.py
-        echo '  dns_info = subprocess.check_output(["cat", "/etc/resolv.conf"]).decode()' >> generate_system_info.py
-        echo '  system_info += "\\nDNS Servers: " + dns_info' >> generate_system_info.py
-        echo 'except subprocess.CalledProcessError as e:' >> generate_system_info.py
-        echo '  system_info += "\\nNetwork Info: Unable to fetch data"' >> generate_system_info.py
+        def collect_comprehensive_system_info():
+            system_info = {}
 
-        # System Limits
-        echo 'system_info += "\n\n=== System Limits ===\n"' >> generate_system_info.py
-        echo 'system_info += "Max Open Files: " + str(os.sysconf("SC_OPEN_MAX"))' >> generate_system_info.py
-        echo 'system_info += "\\nFile Descriptors: " + str(psutil.Process(os.getpid()).num_fds())' >> generate_system_info.py
+            # System Identification
+            system_info['system_identification'] = {
+                'os_name': distro.name(pretty=True),
+                'os_version': distro.version(),
+                'os_codename': distro.codename(),
+                'kernel_version': platform.release(),
+                'architecture': platform.machine(),
+                'hostname': socket.gethostname(),
+            }
 
-        # Stress Test Output
-        echo 'system_info += "\n\n=== Stress Test ===\n"' >> generate_system_info.py
-        echo 'stress = subprocess.Popen(["stress", "--cpu", "4", "--timeout", "5s"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)' >> generate_system_info.py
-        echo 'stdout, stderr = stress.communicate()' >> generate_system_info.py
-        echo 'system_info += "Stress Test Output: \\n" + stdout.decode() + stderr.decode()' >> generate_system_info.py
+            # CPU Detailed Information
+            cpu_info = cpuinfo.get_cpu_info()
+            system_info['cpu_details'] = {
+                'brand': cpu_info.get('brand_raw', 'Unknown'),
+                'arch': cpu_info.get('arch', 'Unknown'),
+                'bits': cpu_info.get('bits', 'Unknown'),
+                'count': {
+                    'physical': psutil.cpu_count(logical=False),
+                    'logical': psutil.cpu_count(logical=True)
+                },
+                'frequency': {
+                    'current': psutil.cpu_freq().current,
+                    'min': psutil.cpu_freq().min,
+                    'max': psutil.cpu_freq().max
+                },
+                'flags': cpu_info.get('flags', [])
+            }
 
-        # Write to a file
-        echo 'with open("system_info.txt", "w") as f: f.write(system_info)' >> generate_system_info.py
+            # Memory Comprehensive Details
+            memory = psutil.virtual_memory()
+            system_info['memory'] = {
+                'total': memory.total / (1024.0 ** 3),
+                'available': memory.available / (1024.0 ** 3),
+                'used': memory.used / (1024.0 ** 3),
+                'free': memory.free / (1024.0 ** 3),
+                'percent': memory.percent,
+                'swap': dict(psutil.swap_memory()._asdict())
+            }
 
-    - name: Run the Python script to collect system information
+            # Disk Information
+            disk_partitions = psutil.disk_partitions()
+            system_info['disk_info'] = {
+                'partitions': [],
+                'usage': []
+            }
+            for partition in disk_partitions:
+                try:
+                    partition_usage = psutil.disk_usage(partition.mountpoint)
+                    system_info['disk_info']['partitions'].append({
+                        'device': partition.device,
+                        'mountpoint': partition.mountpoint,
+                        'fstype': partition.fstype,
+                        'opts': partition.opts
+                    })
+                    system_info['disk_info']['usage'].append({
+                        'total': partition_usage.total / (1024.0 ** 3),
+                        'used': partition_usage.used / (1024.0 ** 3),
+                        'free': partition_usage.free / (1024.0 ** 3),
+                        'percent': partition_usage.percent
+                    })
+                except PermissionError:
+                    pass
+
+            # Network Interfaces
+            system_info['network_interfaces'] = {}
+            for interface in netifaces.interfaces():
+                try:
+                    addrs = netifaces.ifaddresses(interface)
+                    system_info['network_interfaces'][interface] = {
+                        'ipv4': addrs.get(netifaces.AF_INET, [{}])[0],
+                        'ipv6': addrs.get(netifaces.AF_INET6, [{}])[0],
+                        'mac': addrs.get(netifaces.AF_LINK, [{}])[0]
+                    }
+                except ValueError:
+                    pass
+
+            # GPU Information
+            try:
+                gpus = GPUtil.getGPUs()
+                system_info['gpu_details'] = [
+                    {
+                        'name': gpu.name,
+                        'driver': gpu.driver,
+                        'memory': {
+                            'total': gpu.memoryTotal,
+                            'free': gpu.memoryFree,
+                            'used': gpu.memoryUsed
+                        }
+                    } for gpu in gpus
+                ]
+            except Exception:
+                system_info['gpu_details'] = []
+
+            # Sensors and Temperature
+            try:
+                sensors_output = safe_run_command("sensors")
+                system_info['temperature_sensors'] = sensors_output
+            except Exception:
+                system_info['temperature_sensors'] = "Unable to read sensors"
+
+            # Battery Information
+            try:
+                battery = psutil.sensors_battery()
+                system_info['battery'] = {
+                    'percent': battery.percent,
+                    'power_plugged': battery.power_plugged,
+                    'time_left': battery.secsleft
+                }
+            except Exception:
+                system_info['battery'] = None
+
+            # Network Speed Test
+            try:
+                st = speedtest.Speedtest()
+                system_info['network_speed'] = {
+                    'download': st.download() / 1_000_000,  # Mbps
+                    'upload': st.upload() / 1_000_000,     # Mbps
+                    'ping': st.results.ping
+                }
+            except Exception:
+                system_info['network_speed'] = None
+
+            # System Load and Processes
+            system_info['system_load'] = {
+                'load_avg': os.getloadavg(),
+                'running_processes': len(psutil.pids())
+            }
+
+            # Running Services
+            try:
+                services_output = safe_run_command("systemctl list-units --type=service")
+                system_info['running_services'] = services_output
+            except Exception:
+                system_info['running_services'] = "Unable to list services"
+
+            # Detailed Hardware Information
+            system_info['hardware_details'] = {
+                'lspci': safe_run_command("lspci -vv"),
+                'lsusb': safe_run_command("lsusb -v"),
+                'dmidecode': safe_run_command("dmidecode")
+            }
+
+            return system_info
+
+        def main():
+            system_info = collect_comprehensive_system_info()
+            
+            # Write JSON
+            with open('system_info.json', 'w') as f:
+                json.dump(system_info, f, indent=4)
+            
+            # Write readable text
+            with open('system_info.txt', 'w') as f:
+                f.write(json.dumps(system_info, indent=4))
+
+        if __name__ == '__main__':
+            main()
+        EOL
+
+    - name: Run Comprehensive System Information Script
       run: |
         python3 generate_system_info.py
 
-    - name: Upload system_info.txt as artifact
+    - name: Upload System Information Artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: system-info
-        path: system_info.txt
+        name: comprehensive-system-info
+        path: |
+          system_info.json
+          system_info.txt
+
+    - name: Additional System Diagnostics
+      run: |
+        # Run additional comprehensive system checks
+        echo "Running comprehensive system diagnostics..."
+        
+        # Network Diagnostics
+        echo "Network Diagnostics:" > network_diagnostics.txt
+        ip a >> network_diagnostics.txt
+        netstat -tuln >> network_diagnostics.txt
+        route -n >> network_diagnostics.txt
+        
+        # Process Tree
+        echo "Process Tree:" > process_tree.txt
+        ps aux --forest >> process_tree.txt
+        
+        # System Performance Metrics
+        echo "System Performance:" > performance_metrics.txt
+        top -b -n 1 >> performance_metrics.txt
+        vmstat 1 5 >> performance_metrics.txt
+        
+        # Security Scan
+        echo "Basic Security Scan:" > security_scan.txt
+        nmap -sV localhost >> security_scan.txt
+
+    - name: Upload Additional Diagnostic Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: system-diagnostics
+        path: |
+          network_diagnostics.txt
+          process_tree.txt
+          performance_metrics.txt
+          security_scan.txt
