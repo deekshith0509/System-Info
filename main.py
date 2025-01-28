@@ -12,7 +12,6 @@ from kivy.lang import Builder
 from kivy.metrics import dp
 from kivy.properties import StringProperty, BooleanProperty, ObjectProperty
 from kivy.clock import Clock
-from kivy.core.window import Window
 from kivymd.app import MDApp
 from kivymd.uix.tab import MDTabsBase
 from kivymd.uix.floatlayout import MDFloatLayout
@@ -466,7 +465,6 @@ class SystemInfoApp(MDApp):
         self.theme_cls.primary_palette = "DeepPurple"
         self.theme_cls.accent_palette = "Teal"
         self.theme_cls.theme_style = "Light"
-        Window.size = (400, 800)
         return Builder.load_string(KV)
     def make_binaries_executable(self):
         # Use user_data_dir for a proper location
