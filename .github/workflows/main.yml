@@ -29,11 +29,10 @@ jobs:
         run: |
           sudo apt update && sudo apt install -y \
             python3-pip python3-setuptools python3-wheel git zip unzip zlib1g-dev \
-            libncurses5 libffi-dev libssl-dev liblzma-dev libgdbm-dev libbz2-dev libreadline-dev \
+            libncurses6 libffi-dev libssl-dev liblzma-dev libgdbm-dev libbz2-dev libreadline-dev \
             libsqlite3-dev libffi-dev libgdbm-compat-dev curl
           python3 -m pip install --upgrade pip setuptools cython
           python3 -m pip install buildozer
-      
       # Set up Android SDK and NDK
       - name: Install Android SDK and NDK
         run: |
