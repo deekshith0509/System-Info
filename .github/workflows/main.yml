@@ -4,7 +4,7 @@ on:
     branches: [main]
 jobs:
   build:
-    runs-on: ubuntu-24.04-arm  # Updated to Ubuntu 24.04 ARM
+    runs-on: ubuntu-20.04
 
     steps:
       # Checkout the repository
@@ -40,7 +40,6 @@ jobs:
           wget https://dl.google.com/android/repository/commandlinetools-linux-8512546_latest.zip -O /tmp/cmdline-tools.zip
           unzip -d ~/.buildozer/android/platform /tmp/cmdline-tools.zip
           rm /tmp/cmdline-tools.zip
-          sudo apt-get install aidl 
           yes | ~/.buildozer/android/platform/cmdline-tools/bin/sdkmanager --sdk_root=~/.buildozer/android/platform "platform-tools" "build-tools;33.0.2" "platforms;android-33" "ndk;25.2.9519653"
       
       # Initialize Buildozer (if not already initialized)
