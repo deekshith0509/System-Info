@@ -1,3 +1,9 @@
+from kivy.metrics import dp
+from kivymd.uix.dialog import MDDialog
+from kivymd.uix.button import MDFlatButton
+from kivymd.uix.list import OneLineIconListItem
+from kivymd.uix.selectioncontrol import MDSwitch
+from kivymd.uix.boxlayout import MDBoxLayout  # FIX: Import MDBoxLayout
 from kivy.utils import platform
 from kivymd.uix.boxlayout import MDBoxLayout
 from kivy.uix.boxlayout import BoxLayout
@@ -106,22 +112,22 @@ class LoadingSpinner(MDSpinner):
     pass
 
 
+
+import os
+import subprocess
+import platform
+
 class SystemCommands:
     @staticmethod
     def _get_binary_path(binary_name):
-        """Check if the binary exists in the app's 'bin' directory, fall back to system path."""
-        app_bin_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'bin', binary_name)
+        """Check if the binary exists in the app's 'user_data_dir/app/bin' directory, fall back to system path."""
+        app_bin_path = os.path.join('bin', binary_name)
         
-        if platform == 'android':
-            # Check if the binary is available in the 'bin' directory for Android app
-            if os.path.exists(app_bin_path) and os.access(app_bin_path, os.X_OK):
-                return app_bin_path
-        else:
-            # If not on Android, fall back to system binaries
-            if os.path.exists(app_bin_path) and os.access(app_bin_path, os.X_OK):
-                return app_bin_path
+        # Check if the binary exists in the app's bin directory
+        if os.path.exists(app_bin_path):
+            return app_bin_path
         
-        # Fallback to system binary path if not found in 'bin'
+        # If not found, return the binary name to search in system PATH
         return binary_name
 
     @staticmethod
@@ -129,20 +135,28 @@ class SystemCommands:
         """Execute a system command with timeout and error handling, with priority for app's binary."""
         try:
             # Modify the command to use the app's binary if available
-            modified_command = SystemCommands._get_binary_path(command.split()[0])
+            binary_name = command.split()[0]  # Extract the binary name (first part of the command)
+            modified_command = SystemCommands._get_binary_path(binary_name)
             
-            # Ensure the command uses the full path or fallback to system binaries
+            # Add the app's bin directory to the PATH for proper binary execution
+            os.environ['PATH'] = os.path.join( 'app', 'bin') + os.pathsep + os.environ.get('PATH', '')
+            
+            # Run the modified command
             result = subprocess.run(
                 [modified_command] + command.split()[1:],  # Add remaining arguments to the command
                 shell=False,
                 capture_output=True,
                 text=True,
                 timeout=timeout,
-                env={'LANG': 'C'}
+                env={'LANG': 'C'}  # Set the language environment variable to 'C' for uniform output
             )
+            
+            # Return the command output if successful, or an error message if the command failed
             return result.stdout.strip() if result.returncode == 0 else f"Error: {result.stderr}"
+        
         except subprocess.TimeoutExpired:
             return "Command timed out"
+        
         except Exception as e:
             return f"Error: {str(e)}"
 
@@ -150,7 +164,7 @@ class SystemCommands:
     def get_getprop_info():
         """Fetch the output of the `getprop` command and format it properly."""
         import subprocess
-        output = subprocess.check_output(["getprop"]).decode("utf-8")
+        output = subprocess.check_output(["./bin/getprop"]).decode("utf-8")
         
         # Parse the output into a list of dictionaries for each property
         properties = []
@@ -217,7 +231,7 @@ class SystemCommands:
             "CPU Cores": {
                 "cmd": "nproc",
                 "icon": "cpu-64-bit" if "64" in subprocess.check_output(['uname', '-m']).decode() else "cpu-32-bit",
-                "parse": lambda x: f"Cores: {x.split()[0]}\n{x.split('CPU architecture')[1] if 'CPU architecture' in x else ''}"
+                "parse": lambda x: x
             },
             "CPU Governor": {
                 "cmd": "cat /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor",
@@ -284,7 +298,7 @@ class SystemCommands:
                 "parse": lambda x: x.replace('\n', '\n\n')
             },
             "WiFi Info": {
-                "cmd": "ifconfig wlan0",
+                "cmd": "ifconfig 2>/dev/null | grep -oP 'inet \K[\d.]+'",
                 "icon": "wifi",
                 "parse": lambda x: SystemCommands._parse_wifi_output(x)
             },
@@ -448,7 +462,7 @@ class Tab(MDFloatLayout, MDTabsBase):
     pass
     
 class SystemInfoApp(MDApp):
-    update_interval = 30  # seconds
+    update_interval = 60  # seconds
     _update_thread = None
     _stop_thread = False
 
@@ -467,11 +481,9 @@ class SystemInfoApp(MDApp):
         self.theme_cls.theme_style = "Light"
         return Builder.load_string(KV)
     def make_binaries_executable(self):
-        # Use user_data_dir for a proper location
-        bin_dir = os.path.join(self.user_data_dir, 'bin')
-
+        bin_path="bin"
         # Command to make all binaries in the bin directory executable
-        chmod_command = f"chmod +x {bin_dir}/*"
+        chmod_command = f"chmod +x {bin_path}/*"
 
         try:
             # Invoke the command directly using subprocess
@@ -528,24 +540,21 @@ class SystemInfoApp(MDApp):
         self.theme_cls.theme_style = "Dark" if self.theme_cls.theme_style == "Light" else "Light"
         self.update_system_data()  # Refresh to apply new theme
 
+
     def show_settings(self, *args):
         """Show settings dialog"""
-        from kivymd.uix.dialog import MDDialog
-        from kivymd.uix.button import MDFlatButton
-        from kivymd.uix.list import OneLineIconListItem
-        from kivymd.uix.selectioncontrol import MDSwitch
         
-        dialog_content = MDBoxLayout(
+        dialog_content = MDBoxLayout(  # FIX: Use MDBoxLayout instead of BoxLayout
             orientation='vertical',
             spacing=dp(10),
             padding=dp(20),
             adaptive_height=True
         )
-        
+
         # Auto-refresh toggle
-        refresh_row = BoxLayout(adaptive_height=True)
+        refresh_row = MDBoxLayout(adaptive_height=True)  # FIX: Change to MDBoxLayout
         refresh_row.add_widget(
-            OneLineIconListItem(text="Auto-refresh", icon="refresh")
+            OneLineIconListItem(text="Auto-refresh")  # Removed 'icon' because OneLineIconListItem needs a LeftIcon
         )
         refresh_switch = MDSwitch(
             active=self.monitor_active,
@@ -553,7 +562,7 @@ class SystemInfoApp(MDApp):
         )
         refresh_row.add_widget(refresh_switch)
         dialog_content.add_widget(refresh_row)
-        
+
         dialog = MDDialog(
             title="Settings",
             type="custom",
