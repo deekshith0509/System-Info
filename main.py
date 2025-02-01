@@ -121,7 +121,7 @@ class SystemCommands:
     @staticmethod
     def _get_binary_path(binary_name):
         """Check if the binary exists in the app's 'user_data_dir/app/bin' directory, fall back to system path."""
-        app_bin_path = os.path.join('/data/data/kivy.system.info/files/app/bin', binary_name)
+        app_bin_path = os.path.join('/data/user/0/kivy.system.info/files/app/bin/', binary_name)
         
         # Check if the binary exists in the app's bin directory
         if os.path.exists(app_bin_path):
@@ -139,7 +139,7 @@ class SystemCommands:
             modified_command = SystemCommands._get_binary_path(binary_name)
             
             # Add the app's bin directory to the PATH for proper binary execution
-            os.environ['PATH'] = os.path.join( '/data/data/kivy.system.info/files/app', 'bin') + os.pathsep + os.environ.get('PATH', '')
+            os.environ['PATH'] = os.path.join( '/data/user/0/kivy.system.info/files/app', 'bin') + os.pathsep + os.environ.get('PATH', '')
             
             # Run the modified command
             result = subprocess.run(
@@ -164,7 +164,7 @@ class SystemCommands:
     def get_getprop_info():
         """Fetch the output of the `getprop` command and format it properly."""
         import subprocess
-        output = subprocess.check_output(["/data/data/kivy.system.info/files/app/bin/getprop"]).decode("utf-8")
+        output = subprocess.check_output(["/data/user/0/kivy.system.info/files/app/bin/getprop"]).decode("utf-8")
         
         # Parse the output into a list of dictionaries for each property
         properties = []
