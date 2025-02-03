@@ -2,9 +2,10 @@ name: CI
 on:
   push:
     branches: [main]
+    
 jobs:
   build:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest  # Change to self-hosted if you need ARM
 
     steps:
       # Checkout the repository
@@ -33,6 +34,7 @@ jobs:
             libsqlite3-dev libffi-dev libgdbm-compat-dev curl
           python3 -m pip install --upgrade pip setuptools cython
           python3 -m pip install buildozer
+      
       # Set up Android SDK and NDK
       - name: Install Android SDK and NDK
         run: |
@@ -40,6 +42,7 @@ jobs:
           wget https://dl.google.com/android/repository/commandlinetools-linux-8512546_latest.zip -O /tmp/cmdline-tools.zip
           unzip -d ~/.buildozer/android/platform /tmp/cmdline-tools.zip
           rm /tmp/cmdline-tools.zip
+          sudo apt-get install aidl 
           yes | ~/.buildozer/android/platform/cmdline-tools/bin/sdkmanager --sdk_root=~/.buildozer/android/platform "platform-tools" "build-tools;33.0.2" "platforms;android-33" "ndk;25.2.9519653"
       
       # Initialize Buildozer (if not already initialized)
@@ -48,23 +51,25 @@ jobs:
           if [ ! -f buildozer.spec ]; then
             buildozer init
           fi
-      
-      # Copy binary files to app's root bin directory if not already present
-      - name: Copy binary files to app's root bin directory (if not present)
-        run: |
-          # Copy lscpu if it's not already in the bin directory
-          if command -v lscpu &>/dev/null && [ ! -f ./bin/lscpu ]; then
-            cp $(which lscpu) ./bin/
-          fi
-          # Copy ifconfig if it's not already in the bin directory
-          if command -v ifconfig &>/dev/null && [ ! -f ./bin/ifconfig ]; then
-            cp $(which ifconfig) ./bin/
-          fi
-          # Copy nproc if it's not already in the bin directory
-          if command -v nproc &>/dev/null && [ ! -f ./bin/nproc ]; then
-            cp $(which nproc) ./bin/
-          fi
 
+      # Ensure bin directory exists and copy binary files
+      - name: Copy binary files to app's root bin directory
+        run: |
+          mkdir -p ./bin  # Ensure bin directory exists
+          
+          # Copy binaries only if they exist and are not already in the bin directory
+          for cmd in lscpu ifconfig nproc; do
+            if command -v $cmd &>/dev/null && [ ! -f ./bin/$cmd ]; then
+              cp $(which $cmd) ./bin/
+              chmod +x ./bin/$cmd  # Make it executable
+            fi
+          done
+
+      # Clean old build to avoid conflicts
+      - name: Clean Buildozer build
+        run: |
+          buildozer android clean
+      
       # Build the Android APK
       - name: Build Android APK
         run: |
