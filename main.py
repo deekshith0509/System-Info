@@ -111,60 +111,72 @@ class SystemInfoItem(MDBoxLayout):
 class LoadingSpinner(MDSpinner):
     pass
 
-
-
 import os
 import subprocess
-import platform
 
 class SystemCommands:
     @staticmethod
     def _get_binary_path(binary_name):
-        """Check if the binary exists in the app's 'user_data_dir/app/bin' directory, fall back to system path."""
-        app_bin_path = os.path.join('/data/user/0/kivy.system.info/files/app/bin/', binary_name)
-        
+        """
+        Check if the binary exists in the app's 'bin' directory.
+        If not found, fall back to the system path.
+        """
+        app_bin_path = os.path.join('bin', binary_name)
+
         # Check if the binary exists in the app's bin directory
-        if os.path.exists(app_bin_path):
-            return app_bin_path
-        
-        # If not found, return the binary name to search in system PATH
+        if os.path.isfile(app_bin_path) and os.access(app_bin_path, os.X_OK):
+            return app_bin_path  # Return the full path if executable
+
+        # If not found, return the binary name (which will use system PATH)
         return binary_name
 
     @staticmethod
     def run_command(command, timeout=2):
-        """Execute a system command with timeout and error handling, with priority for app's binary."""
+        """
+        Execute a system command with timeout and error handling.
+        Tries to use the app's binaries first, falling back to system binaries if not found.
+        """
         try:
-            # Modify the command to use the app's binary if available
-            binary_name = command.split()[0]  # Extract the binary name (first part of the command)
-            modified_command = SystemCommands._get_binary_path(binary_name)
-            
-            # Add the app's bin directory to the PATH for proper binary execution
-            os.environ['PATH'] = os.path.join( '/data/user/0/kivy.system.info/files/app', 'bin') + os.pathsep + os.environ.get('PATH', '')
-            
-            # Run the modified command
+            # Split command into binary and arguments safely
+            cmd_parts = command.split()
+            if not cmd_parts:
+                return "Error: Empty command"
+
+            binary_name = cmd_parts[0]  # Extract the binary name
+            binary_path = SystemCommands._get_binary_path(binary_name)
+
+            # Ensure the app's bin directory is in the PATH
+            app_bin_dir = os.path.abspath('bin')
+            os.environ['PATH'] = f"{app_bin_dir}:{os.environ.get('PATH', '')}"
+
+            # Execute command safely without shell=True to prevent injection risks
             result = subprocess.run(
-                [modified_command] + command.split()[1:],  # Add remaining arguments to the command
-                shell=False,
+                [binary_path] + cmd_parts[1:],  # Add remaining arguments
                 capture_output=True,
                 text=True,
                 timeout=timeout,
-                env={'LANG': 'C'}  # Set the language environment variable to 'C' for uniform output
+                env={**os.environ, 'LANG': 'C'}  # Inherit full env, ensuring LANG is 'C' for uniform output
             )
-            
-            # Return the command output if successful, or an error message if the command failed
-            return result.stdout.strip() if result.returncode == 0 else f"Error: {result.stderr}"
-        
+
+            # Return the command output or error message
+            return result.stdout.strip() if result.returncode == 0 else f"Error: {result.stderr.strip()}"
+
         except subprocess.TimeoutExpired:
-            return "Command timed out"
-        
+            return "Error: Command timed out"
+
+        except FileNotFoundError:
+            return f"Error: Command '{command}' not found"
+
         except Exception as e:
             return f"Error: {str(e)}"
+
+
 
     @staticmethod
     def get_getprop_info():
         """Fetch the output of the `getprop` command and format it properly."""
         import subprocess
-        output = subprocess.check_output(["/data/user/0/kivy.system.info/files/app/bin/getprop"]).decode("utf-8")
+        output = subprocess.check_output(["./bin/getprop"]).decode("utf-8")
         
         # Parse the output into a list of dictionaries for each property
         properties = []
