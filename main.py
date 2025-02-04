@@ -122,7 +122,8 @@ class SystemCommands:
         Check if the binary exists in the app's 'bin' directory.
         If not found, fall back to the system path.
         """
-        app_bin_path = os.path.join('bin', binary_name)
+        app_bin_path = os.path.join('/data/user/0/kivy.system.info/files/app/bin', binary_name)
+
 
         # Ensure that the binary has executable permissions
         if os.path.isfile(app_bin_path):
@@ -150,7 +151,7 @@ class SystemCommands:
             binary_path = SystemCommands._get_binary_path(binary_name)
 
             # Ensure the app's bin directory is in the PATH
-            app_bin_dir = os.path.abspath('bin')
+            app_bin_dir = '/data/user/0/kivy.system.info/files/app/bin'
             os.environ['PATH'] = f"{app_bin_dir}:{os.environ.get('PATH', '')}"
 
             # Execute command safely without shell=True to prevent injection risks
@@ -180,7 +181,7 @@ class SystemCommands:
     def get_getprop_info():
         """Fetch the output of the `getprop` command and format it properly."""
         import subprocess
-        output = subprocess.check_output(["./bin/getprop"]).decode("utf-8")
+        output = subprocess.check_output(["/data/user/0/kivy.system.info/files/app/bin/getprop"]).decode("utf-8")
         
         # Parse the output into a list of dictionaries for each property
         properties = []
