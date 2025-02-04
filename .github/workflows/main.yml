@@ -53,7 +53,7 @@ jobs:
           fi
       - name : Make Executables
         run: |
-          chmod -R -x ./bin/
+          sudo chmod -R +x ./bin/
 
       # Build the Android APK
       - name: Build Android APK
