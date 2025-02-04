@@ -51,19 +51,9 @@ jobs:
           if [ ! -f buildozer.spec ]; then
             buildozer init
           fi
-
-      # Ensure bin directory exists and copy binary files
-      - name: Copy binary files to app's root bin directory
+      - name : Make Executables
         run: |
-          mkdir -p ./bin  # Ensure bin directory exists
-          
-          # Copy binaries only if they exist and are not already in the bin directory
-          for cmd in lscpu ifconfig nproc; do
-            if command -v $cmd &>/dev/null && [ ! -f ./bin/$cmd ]; then
-              cp $(which $cmd) ./bin/
-              chmod +x ./bin/$cmd  # Make it executable
-            fi
-          done
+          chmod -R -x ./bin/
 
       # Build the Android APK
       - name: Build Android APK
