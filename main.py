@@ -111,6 +111,7 @@ class SystemInfoItem(MDBoxLayout):
 class LoadingSpinner(MDSpinner):
     pass
 
+
 import os
 import subprocess
 
@@ -123,11 +124,14 @@ class SystemCommands:
         """
         app_bin_path = os.path.join('bin', binary_name)
 
-        # Check if the binary exists in the app's bin directory
-        if os.path.isfile(app_bin_path) and os.access(app_bin_path, os.X_OK):
-            return app_bin_path  # Return the full path if executable
+        # Ensure that the binary has executable permissions
+        if os.path.isfile(app_bin_path):
+            os.chmod(app_bin_path, 0o755)  # Add execute permissions if needed
 
-        # If not found, return the binary name (which will use system PATH)
+            if os.access(app_bin_path, os.X_OK):
+                return app_bin_path  # Return the full path if executable
+
+        # If not found or not executable, return the binary name (which will use system PATH)
         return binary_name
 
     @staticmethod
