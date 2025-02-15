@@ -120,28 +120,49 @@ class SystemCommands:
     def _get_binary_path(binary_name):
         """
         Check if the binary exists in the app's 'bin' directory.
-        If not found, fall back to the system path.
+        If not found, fall back to the binary name (which will use the app's private PATH).
         """
         app_bin_path = os.path.join('/data/user/0/kivy.system.info/files/app/bin', binary_name)
-
 
         # Ensure that the binary has executable permissions
         if os.path.isfile(app_bin_path):
             os.chmod(app_bin_path, 0o755)  # Add execute permissions if needed
-
             if os.access(app_bin_path, os.X_OK):
                 return app_bin_path  # Return the full path if executable
 
-        # If not found or not executable, return the binary name (which will use system PATH)
+        # If not found or not executable, return the binary name (which will use the app's private PATH)
         return binary_name
+
+    @staticmethod
+    def _setup_private_environment():
+        """
+        Set up a private environment for the app, similar to Termux.
+        This includes setting the PATH and other necessary environment variables.
+        """
+        # App's private bin directory
+        app_bin_dir = '/data/user/0/kivy.system.info/files/app/bin'
+
+        # Set the PATH to include the app's private bin directory
+        os.environ['PATH'] = f"{app_bin_dir}:{os.environ.get('PATH', '')}"
+
+        # Set other environment variables if needed
+        os.environ['HOME'] = '/data/user/0/kivy.system.info/files/app'  # Set a home directory
+        os.environ['TMPDIR'] = '/data/user/0/kivy.system.info/files/app/tmp'  # Set a tmp directory
+
+        # Create the tmp directory if it doesn't exist
+        if not os.path.exists(os.environ['TMPDIR']):
+            os.makedirs(os.environ['TMPDIR'], mode=0o755)
 
     @staticmethod
     def run_command(command, timeout=2):
         """
         Execute a system command with timeout and error handling.
-        Tries to use the app's binaries first, falling back to system binaries if not found.
+        Tries to use the app's binaries first, falling back to the binary name if not found.
         """
         try:
+            # Set up the private environment
+            SystemCommands._setup_private_environment()
+
             # Split command into binary and arguments safely
             cmd_parts = command.split()
             if not cmd_parts:
@@ -150,17 +171,13 @@ class SystemCommands:
             binary_name = cmd_parts[0]  # Extract the binary name
             binary_path = SystemCommands._get_binary_path(binary_name)
 
-            # Ensure the app's bin directory is in the PATH
-            app_bin_dir = '/data/user/0/kivy.system.info/files/app/bin'
-            os.environ['PATH'] = f"{app_bin_dir}:{os.environ.get('PATH', '')}"
-
             # Execute command safely without shell=True to prevent injection risks
             result = subprocess.run(
                 [binary_path] + cmd_parts[1:],  # Add remaining arguments
                 capture_output=True,
                 text=True,
                 timeout=timeout,
-                env={**os.environ, 'LANG': 'C'}  # Inherit full env, ensuring LANG is 'C' for uniform output
+                env=os.environ  # Use the modified environment
             )
 
             # Return the command output or error message
@@ -174,8 +191,6 @@ class SystemCommands:
 
         except Exception as e:
             return f"Error: {str(e)}"
-
-
 
     @staticmethod
     def get_getprop_info():
