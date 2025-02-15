@@ -3,7 +3,6 @@ name: Build Android APK
 on:
   push:
     branches: [docker]
-
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -22,7 +21,7 @@ jobs:
           restore-keys: |
             buildozer-${{ runner.os }}-
 
-      # Initialize Buildozer (if not already initialized)
+      # Ensure Buildozer is initialized
       - name: Initialize Buildozer
         run: |
           if [ ! -f buildozer.spec ]; then
@@ -34,11 +33,12 @@ jobs:
       - name: Build Android APK (Docker)
         run: |
           docker run --rm \
+            --entrypoint="" \
             -v ${{ github.workspace }}:/home/user/app \
             -v $HOME/.buildozer:/home/user/.buildozer \
             -w /home/user/app \
-            ghcr.io/kivy/buildozer \
-            bash -c "buildozer android debug"
+            ghcr.io/kivy/buildozer:latest \
+            sh -c "buildozer android debug"
 
       # Upload the built APK as an artifact
       - name: Upload APK
