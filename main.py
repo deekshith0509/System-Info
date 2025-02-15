@@ -138,7 +138,7 @@ class SystemCommands:
             ])
 
             # Get app's private directory
-            app_dir = app_storage_path()
+            app_dir = app_storage_path()+"/files/app/"
 
             # Set up logging first
             log_dir = os.path.join(app_dir, '.kivy', 'logs')
