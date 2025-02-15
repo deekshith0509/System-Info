@@ -47,7 +47,6 @@ android.meta_data = android.selinux.sandbox=true
 
 # Build settings
 android.release_artifact_signing = platform
-android.add_compile_options = -Xlint:unchecked
 android.add_gradle_repositories = 'maven { url "https://jitpack.io" }'
 
 # Requirements
@@ -64,12 +63,12 @@ android.logcat_filters = *:D
 android.logcat = True
 
 # Build settings
-android.gradle_dependencies = com.android.support:support-compat:28.0.0
+android.gradle_dependencies = androidx.core:core:1.6.0
 
 # P4A specific
 p4a.branch = master
 p4a.local_recipes =
-android.add_src = 
+android.add_src =
 
 [buildozer]
 log_level = 2
