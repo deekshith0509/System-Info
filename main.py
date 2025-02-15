@@ -47,7 +47,7 @@ MDBoxLayout:
         id: refresh_layout
         refresh_callback: app.refresh_callback
         root_layout: root
-        
+
         MDList:
             id: container
             padding: dp(10)
@@ -107,9 +107,11 @@ class SystemInfoItem(MDBoxLayout):
     tertiary_text = StringProperty()
     icon = StringProperty()
 
-        
+
 class LoadingSpinner(MDSpinner):
     pass
+
+
 
 
 import os
@@ -117,8 +119,10 @@ import subprocess
 import stat
 import logging
 import shutil
-from android.permissions import request_permissions, Permission
-from android.storage import app_storage_path
+
+if platform == "android":
+    from android.permissions import request_permissions, Permission
+    from android.storage import app_storage_path
 
 class SystemCommands:
     @classmethod
@@ -135,11 +139,11 @@ class SystemCommands:
 
             # Get app's private directory
             app_dir = app_storage_path()
-            
+
             # Set up logging first
             log_dir = os.path.join(app_dir, '.kivy', 'logs')
             os.makedirs(log_dir, mode=0o755, exist_ok=True)
-            
+
             logging.basicConfig(
                 level=logging.DEBUG,
                 format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -166,7 +170,7 @@ class SystemCommands:
             # Copy Kivy logo files
             bundle_path = os.path.join(app_dir, '_python_bundle/site-packages/kivy/data/logo')
             icon_dir = os.path.join(app_dir, '.kivy/icon')
-            
+
             if os.path.exists(bundle_path):
                 os.makedirs(icon_dir, mode=0o755, exist_ok=True)
                 for filename in os.listdir(bundle_path):
@@ -195,31 +199,26 @@ class SystemCommands:
     @staticmethod
     def _get_binary_path(binary_name):
         """
-        Check if the binary exists in the app's 'bin' directory with proper permission handling.
+        Ensure that the binary is executed from the app's bin directory if it exists.
         """
         try:
             app_bin_path = os.path.join(app_storage_path(), 'bin', binary_name)
-            
-            # Check if the binary exists
+
+            # Ensure the binary exists
             if os.path.isfile(app_bin_path):
-                try:
-                    # Get current permissions
-                    current_mode = os.stat(app_bin_path).st_mode
-                    
-                    # Add execute permission while preserving other permissions
-                    new_mode = current_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH
-                    os.chmod(app_bin_path, new_mode)
-                    
-                    if os.access(app_bin_path, os.X_OK):
-                        return app_bin_path
-                except PermissionError:
-                    logging.warning(f"Cannot modify permissions for: {app_bin_path}")
-                    return binary_name
-            
-            return binary_name
+                # Set execute permissions if necessary
+                current_mode = os.stat(app_bin_path).st_mode
+                new_mode = current_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH
+                os.chmod(app_bin_path, new_mode)
+
+                # Check if it is executable
+                if os.access(app_bin_path, os.X_OK):
+                    return app_bin_path  # Always return the full path!
+
+            return binary_name  # Default to system binary
         except Exception as e:
             logging.error(f"Error in _get_binary_path: {str(e)}")
-            return binary_name
+            return binary_name  # Fallback to system binary if an error occurs
 
     @staticmethod
     def _setup_private_environment():
@@ -239,41 +238,43 @@ class SystemCommands:
             os.environ['PATH'] = f"{app_bin_dir}:{os.environ.get('PATH', '')}"
             os.environ['HOME'] = app_dir
             os.environ['TMPDIR'] = app_tmp_dir
-            
+
         except Exception as e:
             logging.error(f"Error in _setup_private_environment: {str(e)}")
 
     @staticmethod
     def run_command(command, timeout=2):
         """
-        Execute a system command with enhanced error handling and logging.
+        Execute a system command with proper environment handling.
         """
         try:
-            # Split command into binary and arguments safely
             cmd_parts = command.split()
             if not cmd_parts:
                 return "Error: Empty command"
-                
+
             binary_name = cmd_parts[0]
             binary_path = SystemCommands._get_binary_path(binary_name)
-            
-            logging.debug(f"Attempting to run command: {binary_path} {' '.join(cmd_parts[1:])}")
-            
-            # Execute command
+
+            # Ensure we execute the full path to avoid using system binaries
+            if binary_path != binary_name:
+                cmd_parts[0] = binary_path
+
+            logging.debug(f"Executing command: {' '.join(cmd_parts)}")
+
             result = subprocess.run(
-                [binary_path] + cmd_parts[1:],
+                cmd_parts,
                 capture_output=True,
                 text=True,
                 timeout=timeout,
                 env=os.environ
             )
-            
+
             if result.returncode == 0:
                 return result.stdout.strip()
             else:
-                logging.error(f"Command failed with error: {result.stderr}")
+                logging.error(f"Command failed: {result.stderr}")
                 return f"Error: {result.stderr.strip()}"
-                
+
         except subprocess.TimeoutExpired:
             return "Error: Command timed out"
         except FileNotFoundError:
@@ -285,26 +286,23 @@ class SystemCommands:
             logging.error(f"Unexpected error: {str(e)}")
             return f"Error: {str(e)}"
 
-
-
-
     @staticmethod
     def get_getprop_info():
         """Fetch the output of the `getprop` command and format it properly."""
-        import subprocess
-        output = subprocess.check_output(["/data/user/0/kivy.system.info/files/app/bin/getprop"]).decode("utf-8")
-        
-        # Parse the output into a list of dictionaries for each property
-        properties = []
-        for line in output.splitlines():
-            if line.startswith('[') and ']' in line:
-                # Strip the brackets from the key and value
-                key, value = line.split(']: [', 1)
-                key = key[1:]  # Remove the leading '['
-                value = value[:-1]  # Remove the trailing ']'
-                properties.append({key, value})
-        
-        return properties
+        try:
+            binary_path = SystemCommands._get_binary_path("getprop")
+            output = subprocess.check_output([binary_path]).decode("utf-8")
+            properties = []
+            for line in output.splitlines():
+                if line.startswith('[') and ']' in line:
+                    key, value = line.split(']: [', 1)
+                    key = key[1:]
+                    value = value[:-1]
+                    properties.append({key: value})
+            return properties
+        except Exception as e:
+            logging.error(f"Error in get_getprop_info: {str(e)}")
+            return []
 
 
     @staticmethod
@@ -482,14 +480,14 @@ class SystemCommands:
         lines = output.split('\n')
         if len(lines) < 2:
             return "Memory information unavailable"
-        
+
         headers = lines[0].split()
         values = lines[1].split()
-        
+
         total = int(values[1]) if len(values) > 1 else 0
         used = int(values[2]) if len(values) > 2 else 0
         free = int(values[3]) if len(values) > 3 else 0
-        
+
         return (f"Total: {total:,} MB\n"
                 f"Used: {used:,} MB ({used/total*100:.1f}%)\n"
                 f"Free: {free:,} MB ({free/total*100:.1f}%)")
@@ -498,18 +496,18 @@ class SystemCommands:
     def _parse_swap_output(output):
         if not output or "Filename" not in output:
             return "No swap configured"
-        
+
         lines = output.split('\n')[1:]
         total_swap = 0
         used_swap = 0
-        
+
         for line in lines:
             if line:
                 parts = line.split()
                 if len(parts) >= 3:
                     total_swap += int(parts[2])
                     used_swap += int(parts[3]) if len(parts) > 3 else 0
-        
+
         return (f"Total Swap: {total_swap/1024:.1f} MB\n"
                 f"Used Swap: {used_swap/1024:.1f} MB\n"
                 f"Free Swap: {(total_swap-used_swap)/1024:.1f} MB")
@@ -518,7 +516,7 @@ class SystemCommands:
     def _parse_disk_output(output):
         result = []
         lines = output.split('\n')
-        
+
         for line in lines[1:]:  # Skip header
             if line:
                 parts = line.split()
@@ -529,19 +527,19 @@ class SystemCommands:
                     avail = parts[3]
                     use_percent = parts[4]
                     mount = parts[5]
-                    
+
                     result.append(f"Mount: {mount}\n"
                                 f"Size: {size}\n"
                                 f"Used: {used} ({use_percent})\n"
                                 f"Available: {avail}\n")
-        
+
         return '\n'.join(result) if result else "No storage information available"
 
     @staticmethod
     def _parse_io_stats(output):
         if not output:
             return "No I/O statistics available"
-        
+
         result = []
         for line in output.split('\n'):
             if line:
@@ -553,26 +551,26 @@ class SystemCommands:
                     result.append(f"Device: {device}\n"
                                 f"Reads: {reads:,}\n"
                                 f"Writes: {writes:,}\n")
-        
+
         return '\n'.join(result)
 
     @staticmethod
     def _parse_wifi_output(output):
         if not output:
             return "WiFi information unavailable"
-        
+
         lines = output.split('\n')
         interface = lines[0] if lines else "unknown"
-        
+
         status = "Disconnected"
         ip_addr = "N/A"
-        
+
         for line in lines:
             if "inet " in line:
                 ip_addr = line.split()[1].split('/')[0]
                 status = "Connected"
                 break
-        
+
         return (f"Interface: {interface}\n"
                 f"Status: {status}\n"
                 f"IP Address: {ip_addr}")
@@ -582,13 +580,13 @@ class SystemCommands:
         lines = output.split('\n')
         operator = lines[0] if lines else "Unknown"
         network_type = lines[1] if len(lines) > 1 else "Unknown"
-        
+
         return (f"Operator: {operator}\n"
                 f"Network Type: {network_type}")
 
 class Tab(MDFloatLayout, MDTabsBase):
     pass
-    
+
 class SystemInfoApp(MDApp):
     update_interval = 60  # seconds
     _update_thread = None
@@ -631,11 +629,11 @@ class SystemInfoApp(MDApp):
             {"title": "Processes", "icon": "format-list-bulleted"},
             {"title": "GetProp", "icon": "database"}  # New tab
         ]
-        
+
         for tab_data in tabs_data:
             tab = Tab(title=f"[size=20]{md_icons[tab_data['icon']]}[/size] {tab_data['title']}")
             self.root.ids.tabs.add_widget(tab)
-        
+
         self.start_monitoring()
         self.update_system_data()
     def on_stop(self):
@@ -673,7 +671,7 @@ class SystemInfoApp(MDApp):
 
     def show_settings(self, *args):
         """Show settings dialog"""
-        
+
         dialog_content = MDBoxLayout(  # FIX: Use MDBoxLayout instead of BoxLayout
             orientation='vertical',
             spacing=dp(10),
@@ -717,7 +715,7 @@ class SystemInfoApp(MDApp):
         """Show application information dialog"""
         from kivymd.uix.dialog import MDDialog
         from kivymd.uix.button import MDFlatButton
-        
+
         dialog = MDDialog(
             title="System Insights Pro",
             text=(
@@ -745,7 +743,7 @@ class SystemInfoApp(MDApp):
         def refresh_callback(interval):
             self.update_system_data()
             self.root.ids.tabs.get_current_tab().ids.refresh_layout.refresh_done()
-        
+
         Clock.schedule_once(refresh_callback, 1)
 
     def update_system_data(self, *args):
@@ -761,28 +759,28 @@ class SystemInfoApp(MDApp):
 
         # Clear existing widgets
         instance_tab.ids.container.clear_widgets()
-        
+
         # Show loading spinner
         spinner = LoadingSpinner(active=True)
         instance_tab.ids.container.add_widget(spinner)
-        
+
         # Get tab name from text (remove icon)
         tab_name = tab_text.split(" ")[-1].lower()
-        
+
         # Schedule data update
         Clock.schedule_once(lambda dt: self._update_tab_data(instance_tab, tab_name, spinner))
 
     def _update_tab_data(self, tab, tab_name, spinner):
         """Update tab data in background"""
         method_name = f"get_{tab_name}_info"
-        
+
         try:
             if hasattr(SystemCommands, method_name):
                 data = getattr(SystemCommands, method_name)()
-                
+
                 # Remove spinner
                 tab.ids.container.remove_widget(spinner)
-                
+
                 # Add new data
                 for item_data in data:
                     icon_widget = IconLeftWidget(
@@ -790,7 +788,7 @@ class SystemInfoApp(MDApp):
                         theme_text_color="Custom",
                         text_color=self.theme_cls.primary_color
                     )
-                    
+
                     item = SystemInfoItem(
                         text=item_data["title"],
                         secondary_text=item_data["content"].split('\n')[0] if item_data["content"] else "N/A",
@@ -798,7 +796,7 @@ class SystemInfoApp(MDApp):
                     )
                     item.add_widget(icon_widget)
                     tab.ids.container.add_widget(item)
-                    
+
         except Exception as e:
             # Remove spinner and show error
             tab.ids.container.remove_widget(spinner)
