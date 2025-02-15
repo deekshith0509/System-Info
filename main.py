@@ -112,85 +112,125 @@ class LoadingSpinner(MDSpinner):
     pass
 
 
+
 import os
 import subprocess
+import stat
+import logging
 
 class SystemCommands:
     @staticmethod
     def _get_binary_path(binary_name):
         """
-        Check if the binary exists in the app's 'bin' directory.
-        If not found, fall back to the binary name (which will use the app's private PATH).
+        Check if the binary exists in the app's 'bin' directory with proper permission handling.
         """
-        app_bin_path = os.path.join('/data/user/0/kivy.system.info/files/app/bin', binary_name)
+        try:
+            app_bin_path = os.path.join('/data/user/0/kivy.system.info/files/app/bin', binary_name)
+            
+            # First check if the bin directory exists and is accessible
+            bin_dir = os.path.dirname(app_bin_path)
+            if not os.path.exists(bin_dir):
+                try:
+                    os.makedirs(bin_dir, mode=0o755)
+                except PermissionError:
+                    logging.warning(f"Cannot create bin directory: {bin_dir}")
+                    return binary_name
 
-        # Ensure that the binary has executable permissions
-        if os.path.isfile(app_bin_path):
-            os.chmod(app_bin_path, 0o755)  # Add execute permissions if needed
-            if os.access(app_bin_path, os.X_OK):
-                return app_bin_path  # Return the full path if executable
-
-        # If not found or not executable, return the binary name (which will use the app's private PATH)
-        return binary_name
+            # Check if the binary exists
+            if os.path.isfile(app_bin_path):
+                try:
+                    # Get current permissions
+                    current_mode = os.stat(app_bin_path).st_mode
+                    
+                    # Add execute permission while preserving other permissions
+                    new_mode = current_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH
+                    os.chmod(app_bin_path, new_mode)
+                    
+                    if os.access(app_bin_path, os.X_OK):
+                        return app_bin_path
+                except PermissionError:
+                    logging.warning(f"Cannot modify permissions for: {app_bin_path}")
+                    return binary_name
+            
+            return binary_name
+        except Exception as e:
+            logging.error(f"Error in _get_binary_path: {str(e)}")
+            return binary_name
 
     @staticmethod
     def _setup_private_environment():
         """
-        Set up a private environment for the app, similar to Termux.
-        This includes setting the PATH and other necessary environment variables.
+        Set up a private environment for the app with proper error handling.
         """
-        # App's private bin directory
-        app_bin_dir = '/data/user/0/kivy.system.info/files/app/bin'
+        try:
+            app_base = '/data/user/0/kivy.system.info/files/app'
+            app_bin_dir = os.path.join(app_base, 'bin')
+            app_tmp_dir = os.path.join(app_base, 'tmp')
 
-        # Set the PATH to include the app's private bin directory
-        os.environ['PATH'] = f"{app_bin_dir}:{os.environ.get('PATH', '')}"
+            # Create directories with proper permissions
+            for directory in [app_base, app_bin_dir, app_tmp_dir]:
+                if not os.path.exists(directory):
+                    try:
+                        os.makedirs(directory, mode=0o755)
+                    except PermissionError:
+                        logging.warning(f"Cannot create directory: {directory}")
 
-        # Set other environment variables if needed
-        os.environ['HOME'] = '/data/user/0/kivy.system.info/files/app'  # Set a home directory
-        os.environ['TMPDIR'] = '/data/user/0/kivy.system.info/files/app/tmp'  # Set a tmp directory
-
-        # Create the tmp directory if it doesn't exist
-        if not os.path.exists(os.environ['TMPDIR']):
-            os.makedirs(os.environ['TMPDIR'], mode=0o755)
+            # Set environment variables
+            os.environ['PATH'] = f"{app_bin_dir}:{os.environ.get('PATH', '')}"
+            os.environ['HOME'] = app_base
+            os.environ['TMPDIR'] = app_tmp_dir
+            
+        except Exception as e:
+            logging.error(f"Error in _setup_private_environment: {str(e)}")
 
     @staticmethod
     def run_command(command, timeout=2):
         """
-        Execute a system command with timeout and error handling.
-        Tries to use the app's binaries first, falling back to the binary name if not found.
+        Execute a system command with enhanced error handling and logging.
         """
         try:
+            # Set up logging
+            logging.basicConfig(level=logging.DEBUG)
+            
             # Set up the private environment
             SystemCommands._setup_private_environment()
-
+            
             # Split command into binary and arguments safely
             cmd_parts = command.split()
             if not cmd_parts:
                 return "Error: Empty command"
-
-            binary_name = cmd_parts[0]  # Extract the binary name
+                
+            binary_name = cmd_parts[0]
             binary_path = SystemCommands._get_binary_path(binary_name)
-
-            # Execute command safely without shell=True to prevent injection risks
+            
+            logging.debug(f"Attempting to run command: {binary_path} {' '.join(cmd_parts[1:])}")
+            
+            # Execute command
             result = subprocess.run(
-                [binary_path] + cmd_parts[1:],  # Add remaining arguments
+                [binary_path] + cmd_parts[1:],
                 capture_output=True,
                 text=True,
                 timeout=timeout,
-                env=os.environ  # Use the modified environment
+                env=os.environ
             )
-
-            # Return the command output or error message
-            return result.stdout.strip() if result.returncode == 0 else f"Error: {result.stderr.strip()}"
-
+            
+            if result.returncode == 0:
+                return result.stdout.strip()
+            else:
+                logging.error(f"Command failed with error: {result.stderr}")
+                return f"Error: {result.stderr.strip()}"
+                
         except subprocess.TimeoutExpired:
             return "Error: Command timed out"
-
         except FileNotFoundError:
             return f"Error: Command '{command}' not found"
-
+        except PermissionError as e:
+            logging.error(f"Permission error: {str(e)}")
+            return f"Error: Permission denied - {str(e)}"
         except Exception as e:
+            logging.error(f"Unexpected error: {str(e)}")
             return f"Error: {str(e)}"
+            
 
     @staticmethod
     def get_getprop_info():
