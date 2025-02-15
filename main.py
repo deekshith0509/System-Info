@@ -112,30 +112,94 @@ class LoadingSpinner(MDSpinner):
     pass
 
 
-
 import os
 import subprocess
 import stat
 import logging
+import shutil
+from android.permissions import request_permissions, Permission
+from android.storage import app_storage_path
 
 class SystemCommands:
+    @classmethod
+    def initialize_environment(cls):
+        """
+        Initialize the environment including Kivy setup and permissions
+        """
+        try:
+            # Request Android permissions
+            request_permissions([
+                Permission.WRITE_EXTERNAL_STORAGE,
+                Permission.READ_EXTERNAL_STORAGE
+            ])
+
+            # Get app's private directory
+            app_dir = app_storage_path()
+            
+            # Set up logging first
+            log_dir = os.path.join(app_dir, '.kivy', 'logs')
+            os.makedirs(log_dir, mode=0o755, exist_ok=True)
+            
+            logging.basicConfig(
+                level=logging.DEBUG,
+                format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+                handlers=[
+                    logging.FileHandler(os.path.join(log_dir, 'system_info.log')),
+                    logging.StreamHandler()
+                ]
+            )
+
+            # Define and create necessary directories
+            directories = {
+                '.kivy': ['logs', 'icon', 'cache'],
+                'bin': [],
+                'tmp': []
+            }
+
+            for dir_name, subdirs in directories.items():
+                base_dir = os.path.join(app_dir, dir_name)
+                os.makedirs(base_dir, mode=0o755, exist_ok=True)
+                for subdir in subdirs:
+                    subdir_path = os.path.join(base_dir, subdir)
+                    os.makedirs(subdir_path, mode=0o755, exist_ok=True)
+
+            # Copy Kivy logo files
+            bundle_path = os.path.join(app_dir, '_python_bundle/site-packages/kivy/data/logo')
+            icon_dir = os.path.join(app_dir, '.kivy/icon')
+            
+            if os.path.exists(bundle_path):
+                os.makedirs(icon_dir, mode=0o755, exist_ok=True)
+                for filename in os.listdir(bundle_path):
+                    src = os.path.join(bundle_path, filename)
+                    dst = os.path.join(icon_dir, filename)
+                    try:
+                        shutil.copy2(src, dst)
+                        os.chmod(dst, 0o644)
+                    except Exception as e:
+                        logging.warning(f"Failed to copy icon {filename}: {str(e)}")
+
+            # Set Kivy environment variables
+            os.environ['KIVY_HOME'] = os.path.join(app_dir, '.kivy')
+            os.environ['KIVY_NO_ARGS'] = '1'
+            os.environ['KIVY_NO_CONSOLELOG'] = '1'
+
+            # Set up system command environment
+            cls._setup_private_environment()
+
+            return True
+
+        except Exception as e:
+            logging.error(f"Failed to initialize environment: {str(e)}")
+            return False
+
     @staticmethod
     def _get_binary_path(binary_name):
         """
         Check if the binary exists in the app's 'bin' directory with proper permission handling.
         """
         try:
-            app_bin_path = os.path.join('/data/user/0/kivy.system.info/files/app/bin', binary_name)
+            app_bin_path = os.path.join(app_storage_path(), 'bin', binary_name)
             
-            # First check if the bin directory exists and is accessible
-            bin_dir = os.path.dirname(app_bin_path)
-            if not os.path.exists(bin_dir):
-                try:
-                    os.makedirs(bin_dir, mode=0o755)
-                except PermissionError:
-                    logging.warning(f"Cannot create bin directory: {bin_dir}")
-                    return binary_name
-
             # Check if the binary exists
             if os.path.isfile(app_bin_path):
                 try:
@@ -163,21 +227,17 @@ class SystemCommands:
         Set up a private environment for the app with proper error handling.
         """
         try:
-            app_base = '/data/user/0/kivy.system.info/files/app'
-            app_bin_dir = os.path.join(app_base, 'bin')
-            app_tmp_dir = os.path.join(app_base, 'tmp')
+            app_dir = app_storage_path()
+            app_bin_dir = os.path.join(app_dir, 'bin')
+            app_tmp_dir = os.path.join(app_dir, 'tmp')
 
-            # Create directories with proper permissions
-            for directory in [app_base, app_bin_dir, app_tmp_dir]:
-                if not os.path.exists(directory):
-                    try:
-                        os.makedirs(directory, mode=0o755)
-                    except PermissionError:
-                        logging.warning(f"Cannot create directory: {directory}")
+            # Ensure directories exist with proper permissions
+            for directory in [app_bin_dir, app_tmp_dir]:
+                os.makedirs(directory, mode=0o755, exist_ok=True)
 
             # Set environment variables
             os.environ['PATH'] = f"{app_bin_dir}:{os.environ.get('PATH', '')}"
-            os.environ['HOME'] = app_base
+            os.environ['HOME'] = app_dir
             os.environ['TMPDIR'] = app_tmp_dir
             
         except Exception as e:
@@ -189,12 +249,6 @@ class SystemCommands:
         Execute a system command with enhanced error handling and logging.
         """
         try:
-            # Set up logging
-            logging.basicConfig(level=logging.DEBUG)
-            
-            # Set up the private environment
-            SystemCommands._setup_private_environment()
-            
             # Split command into binary and arguments safely
             cmd_parts = command.split()
             if not cmd_parts:
@@ -230,7 +284,9 @@ class SystemCommands:
         except Exception as e:
             logging.error(f"Unexpected error: {str(e)}")
             return f"Error: {str(e)}"
-            
+
+
+
 
     @staticmethod
     def get_getprop_info():
@@ -538,6 +594,7 @@ class SystemInfoApp(MDApp):
     _update_thread = None
     _stop_thread = False
 
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.system_commands = SystemCommands()
@@ -547,6 +604,7 @@ class SystemInfoApp(MDApp):
         self.monitor_active = False
 
     def build(self):
+        SystemCommands.initialize_environment()
         self.make_binaries_executable()
         self.theme_cls.primary_palette = "DeepPurple"
         self.theme_cls.accent_palette = "Teal"
